@@ -32,7 +32,7 @@ class ClothingStoreDB:
             self.client.close()
             print("\033[93m[!] Desconectado de la base de datos.\033[0m")
 
-    # --- CRUD GENÉRICO ---
+    # --- CRUD BÁSICO ---
     def insert_one(self, collection_name, document):
         print(f"\nInsertando un documento en '{collection_name}'...")
         col = self.db[collection_name]
