@@ -22,7 +22,8 @@ Este proyecto es una aplicación en Python que gestiona una base de datos MongoD
 - 🧬 **[PyMongo](https://pymongo.readthedocs.io/):** Cliente oficial de MongoDB para Python. Permite operaciones CRUD y agregaciones.
 - 🌱 **[Python-Dotenv](https://pypi.org/project/python-dotenv/):** Carga variables de entorno desde archivos `.env` de forma segura.
 - 🌍 **[MongoDB Atlas](https://www.mongodb.com/atlas/database):** Plataforma de base de datos en la nube usada para el despliegue remoto.
-- 🧭 **[MongoDB Compass](https://www.mongodb.com/try/download/compass):** Interfaz gráfica para explorar y administrar datos en MongoDB de forma visual. (Opcional)
+> Opcional:
+🧭 **[MongoDB Compass](https://www.mongodb.com/try/download/compass):** Interfaz gráfica para explorar y administrar datos en MongoDB de forma visual. 
 ---
 
 
