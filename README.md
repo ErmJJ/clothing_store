@@ -230,6 +230,9 @@ Esta API RESTful en **Python + Flask** expone los datos de la base de datos `clo
 
 ```
 http://127.0.0.1:5000/clothing/api/v1
+
+Variable:
+http://localhost:5000/clothing/api/v1
 ```
 
 ---
