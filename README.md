@@ -18,25 +18,13 @@ Este proyecto es una aplicación en Python que gestiona una base de datos MongoD
 ---
 
 ## 🔧 Tecnologías Utilizadas
-| **Nombre** | **Descripción**   |
-|--------------|--------------|
-| 🐍 **[Python 3.10+](https://www.python.org/downloads/)** | Lenguaje principal del proyecto.   |
-| 🧬 **[PyMongo](https://pymongo.readthedocs.io/)** | Cliente oficial de MongoDB para Python. Permite operaciones CRUD y agregaciones. |
-| Nombre | Descripcion |
-| Nombre | Descripcion |
-| Nombre | Descripcion |
-| Nombre | Descripcion |
-| Nombre | Descripcion |
-| Nombre | Descripcion |
-| Nombre | Descripcion |
-
--  
+- 🐍 **[Python 3.10+](https://www.python.org/downloads/):** Lenguaje principal del proyecto.
+- 🧬 **[PyMongo](https://pymongo.readthedocs.io/):** Cliente oficial de MongoDB para Python. Permite operaciones CRUD y agregaciones. |
 - 🌱 **[python-dotenv](https://pypi.org/project/python-dotenv/):** Carga variables de entorno desde archivos `.env` de forma segura.
 - 🌐 **[Flask](https://flask.palletsprojects.com/):** Framework web ligero para crear aplicaciones RESTful (opcional para extender este proyecto).
 - 🔄 **[Flask-PyMongo](https://flask-pymongo.readthedocs.io/):** Extensión para integrar PyMongo fácilmente en proyectos Flask.
 - 🌍 **[MongoDB Atlas](https://www.mongodb.com/atlas/database):** Plataforma de base de datos en la nube usada para el despliegue remoto.
 - 🧭 **[MongoDB Compass](https://www.mongodb.com/try/download/compass):** Interfaz gráfica para explorar y administrar datos en MongoDB de forma visual.
-
 ---
 
 
