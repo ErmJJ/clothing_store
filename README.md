@@ -5,7 +5,7 @@ Este proyecto es una aplicación en Python que gestiona una base de datos MongoD
 
 ---
 
-## 📦 Estructura del Proyecto
+### 📦 Estructura del Proyecto
 
 ```
 /clothing_store
@@ -17,17 +17,18 @@ Este proyecto es una aplicación en Python que gestiona una base de datos MongoD
 
 ---
 
-## 🔧 Tecnologías Utilizadas
+### 🔧 Tecnologías Utilizadas
 - 🐍 **[Python 3.10+](https://www.python.org/downloads/):** Lenguaje principal del proyecto.
 - 🧬 **[PyMongo](https://pymongo.readthedocs.io/):** Cliente oficial de MongoDB para Python. Permite operaciones CRUD y agregaciones.
 - 🌱 **[Python-Dotenv](https://pypi.org/project/python-dotenv/):** Carga variables de entorno desde archivos `.env` de forma segura.
 - 🌍 **[MongoDB Atlas](https://www.mongodb.com/atlas/database):** Plataforma de base de datos en la nube usada para el despliegue remoto.
 > Opcional:
 🧭 **[MongoDB Compass](https://www.mongodb.com/try/download/compass):** Interfaz gráfica para explorar y administrar datos en MongoDB de forma visual. 
+
 ---
 
 
-## 🔑 Variables de Entorno
+### 🔑 Variables de Entorno
 
 Crea un archivo `.env` con el siguiente contenido:
 
@@ -37,30 +38,18 @@ MONGO_URI=mongodb+srv://<usuario>:<contraseña>@<cluster>.mongodb.net/<base_de_d
 
 ---
 
-## ▶️ Ejecución
+### ▶️ Ejecución
 
 Instala las dependencias necesarias:
 
 ```bash
 pip install -r requirements.txt
 ```
-
 Contenido del archivo `requirements.txt`:
 
 ```
-blinker==1.9.0
-click==8.2.1
-colorama==0.4.6
-dnspython==2.7.0
-Flask==3.1.1
-flask-cors==6.0.1
-Flask-PyMongo==3.0.1
-itsdangerous==2.2.0
-Jinja2==3.1.6
-MarkupSafe==3.0.2
 pymongo==4.13.2
 python-dotenv==1.1.1
-Werkzeug==3.1.3
 ```
 
 Luego ejecuta el script principal:
@@ -68,20 +57,20 @@ Luego ejecuta el script principal:
 ```bash
 python clothing_db.py
 ```
-
+- Después se requerirán más paquetes...
 
 ---
 
-## 📚 Funcionalidades
+### 📚 Funcionalidades
 
-### 🔄 CRUD Genérico
+#### 🔄 CRUD Genérico
 
 - `insert_one(collection, document)`
 - `insert_many(collection, documents)`
 - `update_one(collection, filter, update)`
 - `delete_one(collection, filter)`
 
-### 📊 Consultas Especializadas
+#### 📊 Consultas Especializadas
 
 - `get_sold_quantity_by_date(date_str)`
 - `get_brands_with_sales()`
@@ -90,9 +79,9 @@ python clothing_db.py
 
 ---
 
-## 🧪 Datos Iniciales de Ejemplo
+### 🧪 Datos Iniciales de Ejemplo
 
-### 🏷️ Colección: `brands`
+#### 🏷️ Colección: `brands`
 
 ```json
 {
@@ -102,7 +91,7 @@ python clothing_db.py
 }
 ```
 
-### 👟 Colección: `products`
+#### 👟 Colección: `products`
 
 ```json
 {
@@ -114,7 +103,7 @@ python clothing_db.py
 }
 ```
 
-### 👤 Colección: `users`
+#### 👤 Colección: `users`
 
 ```json
 {
@@ -127,7 +116,7 @@ python clothing_db.py
 }
 ```
 
-### 📝 Colección: `reviews`
+#### 📝 Colección: `reviews`
 
 ```json
 {
@@ -140,7 +129,7 @@ python clothing_db.py
 }
 ```
 
-### 💰 Colección: `sales`
+#### 💰 Colección: `sales`
 
 ```json
 {
@@ -155,7 +144,7 @@ python clothing_db.py
 
 ---
 
-## 📌 Ejemplos de Uso
+### 📌 Ejemplos de Uso
 
 ```python
 # Insertar nuevo usuario
@@ -179,7 +168,7 @@ store_db.get_sold_quantity_by_date("2025-07-10")
 
 ---
 
-## 🚫 Manejo de Errores
+### 🚫 Manejo de Errores
 
 - Verificación de conexión con `ping`.
 - Mensajes en consola con colores ANSI:
@@ -189,25 +178,13 @@ store_db.get_sold_quantity_by_date("2025-07-10")
 
 ---
 
-### 📃 Licencia
 
-Este proyecto es de uso académico y libre para modificación.
-
----
-
-### 💻 Desarrollado por
-
-- Julián Hernández
-Estudiante de Ingeniería Informática – Costa Rica
-
----
-
-# 🧾 API RESTful - Clothing Store
+## 🧾 API RESTful - Clothing Store
 
 Esta API RESTful en **Python + Flask** expone los datos de la base de datos `clothing_store_db`, permitiendo operaciones CRUD sobre entidades clave de una tienda de ropa, así como reportes personalizados para análisis de ventas y productos.
 
 
-## 📁 Estructura del Proyecto
+### 📁 Estructura del Proyecto
 
 ```
 /clothing_store
@@ -226,7 +203,7 @@ Esta API RESTful en **Python + Flask** expone los datos de la base de datos `clo
 
 ---
 
-## 🚀 URL Base
+### 🚀 URL Base
 
 ```
 http://127.0.0.1:5000/clothing/api/v1
@@ -237,9 +214,9 @@ http://localhost:5000/clothing/api/v1
 
 ---
 
-## 📦 Endpoints por Entidad
+### 📦 Endpoints por Entidad
 
-### 🧥 Products
+#### 🧥 Products
 
 - `GET /products`  
   Lista todos los productos.
@@ -267,7 +244,7 @@ http://localhost:5000/clothing/api/v1
 
 ---
 
-### 🏷️ Brands
+#### 🏷️ Brands
 
 - `GET /brands`  
   Lista todas las marcas.
@@ -286,7 +263,7 @@ http://localhost:5000/clothing/api/v1
 
 ---
 
-### 👤 Users
+#### 👤 Users
 
 - `GET /users`  
   Lista todos los usuarios.
@@ -305,7 +282,7 @@ http://localhost:5000/clothing/api/v1
 
 ---
 
-### 💸 Sales
+#### 💸 Sales
 
 - `GET /sales`  
   Lista todas las ventas.
@@ -334,7 +311,7 @@ http://localhost:5000/clothing/api/v1
 
 ---
 
-### 📝 Reviews
+#### 📝 Reviews
 
 - `GET /reviews`  
   Lista todas las reseñas.
@@ -353,9 +330,9 @@ http://localhost:5000/clothing/api/v1
 
 ---
 
-## 📊 Endpoints de Reportes
+### 📊 Endpoints de Reportes
 
-### `GET /reports/brands-with-sales`
+#### `GET /reports/brands-with-sales`
 
 Devuelve las marcas que tienen al menos una venta registrada.
 
@@ -372,7 +349,7 @@ Devuelve las marcas que tienen al menos una venta registrada.
 
 ---
 
-### `GET /reports/sold-products-stock`
+#### `GET /reports/sold-products-stock`
 
 Devuelve los productos vendidos junto con el stock restante.
 
@@ -390,7 +367,7 @@ Devuelve los productos vendidos junto con el stock restante.
 
 ---
 
-### `GET /reports/top-5-brands`
+#### `GET /reports/top-5-brands`
 
 Devuelve las 5 marcas más vendidas según la cantidad total de productos vendidos.
 
@@ -407,7 +384,7 @@ Devuelve las 5 marcas más vendidas según la cantidad total de productos vendid
 
 ---
 
-### `GET /reports/sales-by-date?date=YYYY-MM-DD`
+#### `GET /reports/sales-by-date?date=YYYY-MM-DD`
 
 Devuelve todas las ventas realizadas en una fecha específica.
 
@@ -432,17 +409,48 @@ GET /reports/sales-by-date?date=2025-07-10
 
 ---
 
-## ⚙️ Tecnologías Usadas
+### ▶️ Ejecución
 
-- 🌐 **[Flask](https://flask.palletsprojects.com/):** Framework web ligero para crear aplicaciones RESTful (opcional para extender este proyecto).
-- 🔄 **[Flask-PyMongo](https://flask-pymongo.readthedocs.io/):** Extensión para integrar PyMongo fácilmente en proyectos Flask.
-  
-- Python 3
-- Flask
-- Flask-PyMongo
-- Flask-CORS
-- MongoDB Atlas
-- Postman (para pruebas)
+Instala las dependencias finales necesarias:
+
+```bash
+pip install -r requirements.txt
+```
+
+Contenido del archivo `requirements.txt`:
+
+```
+blinker==1.9.0
+click==8.2.1
+colorama==0.4.6
+dnspython==2.7.0
+Flask==3.1.1
+flask-cors==6.0.1
+Flask-PyMongo==3.0.1
+itsdangerous==2.2.0
+Jinja2==3.1.6
+MarkupSafe==3.0.2
+pymongo==4.13.2
+python-dotenv==1.1.1
+Werkzeug==3.1.3
+```
+
+Luego ejecuta el script principal:
+
+```bash
+python api/v1/run.py
+```
+
+---
+
+### ⚙️ Tecnologías Finales Usadas
+
+- 🐍 **[Python 3.10+](https://www.python.org/downloads/):** Lenguaje principal del proyecto.
+- 🌐 **[Flask](https://flask.palletsprojects.com/):** Framework web ligero para construir APIs RESTful.
+- 🔌 **[Flask-PyMongo](https://flask-pymongo.readthedocs.io/):** Extensión para integrar MongoDB en aplicaciones Flask de forma sencilla.
+- 🔄 **[Flask-CORS](https://flask-cors.readthedocs.io/):** Middleware para permitir solicitudes CORS (Cross-Origin Resource Sharing).
+- ☁️ **[MongoDB Atlas](https://www.mongodb.com/cloud/atlas):** Plataforma de base de datos NoSQL en la nube utilizada para almacenar datos del proyecto.
+- 📬 **[Postman](https://www.postman.com/):** Herramienta para probar los endpoints de la API de manera visual e interactiva.
 
 ---
 
@@ -451,3 +459,14 @@ GET /reports/sales-by-date?date=2025-07-10
 - Todas las respuestas son en formato JSON.
 - Las relaciones entre entidades usan `ObjectId` de MongoDB.
 - Las rutas están versionadas bajo `/clothing/api/v1`.
+
+---
+#### 📃 Licencia
+
+Este proyecto es de uso académico y libre para modificación.
+
+---
+
+### 👨🏻‍💻 Desarrollado por
+- Julián Hernández  
+Profesional/Estudiante en Ingeniería Informática
