@@ -1,14 +1,13 @@
 <!doctype html>
 <html lang="es">
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Clothing Store — Admin UI</title>
 
-  <!-- Fonts -->
+  <!-- Fuente -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -19,130 +18,146 @@
   <!-- App CSS -->
   <link rel="stylesheet" href="front-end/styles/main.css" />
 </head>
-
 <body class="cs-bg">
 
-  <div class="cs-layout">
+  <!-- Topbar -->
+  <header class="topbar d-flex align-items-center justify-content-between px-3 py-2">
+    <div class="d-flex align-items-center gap-3">
+      <div class="d-flex flex-column">
+        <!-- Título principal con icono -->
+        <h1 id="collectionTitle" class="h6 mb-0 fw-semibold">
+          Productos <i class="bi bi-box-seam ms-2 small text-primary" aria-hidden="true"></i>
+        </h1>
+        <small id="collectionSubtitle" class="text-muted">Panel de administración — Clothing Store</small>
+      </div>
+    </div>
 
-    <!-- LEFT: main content -->
-    <main class="cs-main" role="main">
-      <header class="cs-header">
-        <div class="cs-title">
-          <h1 id="collectionTitle">Productos</h1>
-          <p id="collectionSubtitle" class="muted">Panel de administración — Clothing Store</p>
-        </div>
+    <!-- Search + actions -->
+    <div class="d-flex gap-2 align-items-center">
+      <!-- Search enhanced: control visual y botones a la misma altura que botones primarios -->
+      <div class="input-group input-group-sm search-enhanced">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input id="liveSearch" type="search" class="form-control" placeholder="Buscar (nombre, id, usuario, categoría...)">
+        <button id="clearSearch" class="btn btn-light" title="Limpiar"><i class="bi bi-x-lg"></i></button>
+        <button id="btnFilters" class="btn btn-outline-primary" title="Filtros" data-bs-toggle="modal" data-bs-target="#filtersModal"><i class="bi bi-funnel"></i></button>
+      </div>
 
-        <div class="cs-controls d-flex gap-2 align-items-center">
-          <div class="cs-search input-group">
-            <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input id="liveSearch" type="search" class="form-control"
-              placeholder="Buscar (ej. nombre, id, usuario, categoría...)">
-            <button id="clearSearch" class="btn cs-btn-ghost" title="Limpiar"><i class="bi bi-x-lg"></i></button>
-            <button id="searchOptionsBtn" class="btn cs-btn-ghost" title="Filtros" aria-label="Filtros"><i
-                class="bi bi-funnel"></i></button>
-          </div>
+      <div class="d-flex gap-2">
+        <button id="btnColumns" class="btn btn-light" data-bs-toggle="offcanvas" data-bs-target="#columnsOffcanvas" aria-controls="columnsOffcanvas" title="Columnas">
+          <i class="bi bi-layout-three-columns"></i>
+        </button>
 
-          <div class="d-flex gap-2 align-items-center">
-            <!-- Columns: icon-only button -->
-            <button id="btnColumns" class="btn cs-btn-columns" data-bs-toggle="offcanvas"
-              data-bs-target="#columnsOffcanvas" aria-controls="columnsOffcanvas" title="Columnas"
-              aria-label="Columnas">
-              <i class="bi bi-layout-three-columns"></i>
-            </button>
+        <button id="btnExport" class="btn btn-primary" title="Exportar a CSV"><i class="bi bi-download me-1"></i> Exportar</button>
+        <button id="btnCreate" class="btn btn-primary" title="Crear"><i class="bi bi-plus-lg me-1"></i> Crear</button>
 
-            <!-- Export: green flat button, full text -->
-            <button id="btnExport" class="btn cs-btn-export" title="Exportar a CSV" aria-label="Exportar a CSV">
-              <i class="bi bi-download me-1"></i> Exportar a CSV
-            </button>
+        <!-- Hamburger que abre panel derecho en móvil -->
+        <button class="btn btn-outline-secondary d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#panelOffcanvas" aria-controls="panelOffcanvas" aria-label="Abrir panel">
+          <i class="bi bi-list"></i>
+        </button>
+      </div>
+    </div>
+  </header>
 
-            <!-- Create: flat blue button -->
-            <button id="btnCreate" class="btn cs-btn-create" title="Crear" aria-label="Crear">
-              <i class="bi bi-plus-lg me-1"></i> Crear
-            </button>
-          </div>
-
-        </div>
-      </header>
-
-      <section class="cs-content">
-        <div class="cs-card">
-          <div class="cs-card-head">
-            <div class="cs-card-title">
-              <strong id="collectionCardTitle">Listado</strong>
-              <small id="collectionCardSubtitle" class="muted">Vista rápida</small>
+  <!-- Main layout -->
+  <main class="container-fluid my-3">
+    <div class="row g-3">
+      <!-- Main: tabla -->
+      <section class="col-12 col-lg-8">
+        <div class="card shadow-sm p-3">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <strong id="collectionCardTitle" class="fs-6">Listado</strong>
+              <!-- 'Vista rápida' eliminado -->
             </div>
-            <div class="cs-card-actions muted">
-              <span id="apiBaseDisplay" class="small">/api/v1</span>
-            </div>
-          </div>
 
-          <div class="cs-card-body">
-            <div class="table-responsive">
-              <table id="dataTable" class="table cs-table">
-                <thead id="tableHead"></thead>
-                <tbody id="tableBody"></tbody>
-              </table>
+            <!-- Mostrar sólo URL completa de la API -->
+            <div class="text-end small text-muted">
+              <div class="d-block"><small id="apiFullDisplay" class="text-muted">http://127.0.0.1:5000/clothing/api/v1/</small></div>
             </div>
           </div>
 
-          <div class="cs-card-footer d-flex justify-content-between align-items-center">
-            <div class="small muted" id="rowsInfo">0 registros</div>
-            <nav id="pagination" aria-label="Paginación"></nav>
+          <!-- Tabla responsiva: table-layout auto para adaptarse al contenido -->
+          <div class="table-responsive">
+            <table id="dataTable" class="table table-hover align-middle mb-0">
+              <thead id="tableHead" class="table-light"></thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Mensaje cuando no hay columnas visibles -->
+          <div id="noColsMessage" class="text-center text-muted small py-3 d-none">No hay columnas visibles. Usa "Mostrar todas" para restaurarlas.</div>
+
+          <!-- Footer mejorado: info izquierda, paginador centro, pageSize a la derecha -->
+          <div class="d-flex justify-content-between align-items-center gap-3 mt-3">
+            <div id="rowsInfo" class="small text-muted">0 registros</div>
+
+            <div id="paginationArea" class="d-flex align-items-center gap-2">
+              <nav id="pagination" aria-label="Paginación"></nav>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+              <label class="small text-muted mb-0">Filas</label>
+              <select id="pageSizeSelectFooter" class="form-select form-select-sm" style="width:96px;"></select>
+            </div>
           </div>
         </div>
       </section>
-    </main>
 
-    <!-- RIGHT: panel (colecciones + reportes) -->
-    <aside class="cs-panel" aria-label="Panel lateral">
-      <div class="cs-panel-inner">
-        <div class="cs-panel-header">
-          <div>
-            <h3 class="mb-0">Panel</h3>
-            <small class="muted">Control y reportes</small>
+      <!-- Panel lateral (desktop visible a la derecha) -->
+      <aside class="col-12 col-lg-4 d-none d-lg-block">
+        <div class="card shadow-sm p-3">
+          <div class="mb-2">
+            <h3 class="h6 mb-0">Panel</h3>
+            <small class="text-muted">Colecciones y reportes</small>
+          </div>
+
+          <!-- Colecciones (inyectadas por JS) -->
+          <div id="collectionsRadios" class="my-2 list-group"></div>
+
+          <hr>
+
+          <!-- Reportes: botones que quedan marcados (solo 1 activo) -->
+          <div class="mb-3">
+            <label class="form-label small text-muted">Reportes</label>
+            <div id="reportsGroup" class="d-grid gap-2">
+              <button id="report_brands_sales" class="btn btn-outline-primary btn-sm"><i class="bi bi-shop me-2"></i>Marcas con ventas</button>
+              <button id="report_products_stock" class="btn btn-outline-primary btn-sm"><i class="bi bi-basket3 me-2"></i>Prendas vendidas & stock</button>
+              <button id="report_top_brands" class="btn btn-outline-primary btn-sm"><i class="bi bi-graph-up me-2"></i>Top 5 marcas</button>
+              <button id="report_top_users" class="btn btn-outline-primary btn-sm"><i class="bi bi-people me-2"></i>Usuarios con más compras</button>
+              <button id="report_product_ratings" class="btn btn-outline-primary btn-sm"><i class="bi bi-star me-2"></i>Promedio calif. por producto</button>
+            </div>
           </div>
         </div>
+      </aside>
+    </div>
+  </main>
 
-        <div id="collectionsRadios" class="cs-panel-section">
-          <!-- renderCollectionsPanel() in app.js will inject navigation here -->
-        </div>
-
-        <hr class="cs-divider">
-
-        <div class="cs-panel-section">
-          <label class="form-label small muted">Reportes</label>
-          <!-- Report buttons kept visible and styled -->
-          <div class="d-grid gap-2 mb-3">
-            <button id="report_brands_sales" class="btn btn-sm btn-report-old"><i class="bi bi-shop me-2"></i>Marcas con
-              ventas</button>
-            <button id="report_products_stock" class="btn btn-sm btn-report-old"><i
-                class="bi bi-basket3 me-2"></i>Prendas vendidas & stock</button>
-            <button id="report_top_brands" class="btn btn-sm btn-report-old"><i class="bi bi-graph-up me-2"></i>Top 5
-              marcas</button>
-            <button id="report_top_users" class="btn btn-sm btn-report-old"><i class="bi bi-people me-2"></i>Usuarios
-              con más compras</button>
-            <button id="report_product_ratings" class="btn btn-sm btn-report-old"><i
-                class="bi bi-star me-2"></i>Promedio calif. por producto</button>
-          </div>
-        </div>
-
-        <div class="mt-auto cs-panel-footer muted small">
-          API: <code id="apiBaseDisplay2">http://127.0.0.1:5000/clothing/api/v1/</code>
+  <!-- Offcanvas: panel derecho (mismo contenido que aside) -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="panelOffcanvas" aria-labelledby="panelOffcanvasLabel">
+    <div class="offcanvas-header">
+      <h5 id="panelOffcanvasLabel">Panel</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div id="collectionsRadiosOffcanvas" class="list-group mb-3"></div>
+      <hr>
+      <div class="mb-3">
+        <label class="form-label small text-muted">Reportes</label>
+        <div id="reportsGroupOffcanvas" class="d-grid gap-2">
+          <button id="report_brands_sales_m" class="btn btn-outline-primary btn-sm">Marcas con ventas</button>
+          <button id="report_products_stock_m" class="btn btn-outline-primary btn-sm">Prendas vendidas & stock</button>
+          <button id="report_top_brands_m" class="btn btn-outline-primary btn-sm">Top 5 marcas</button>
+          <button id="report_top_users_m" class="btn btn-outline-primary btn-sm">Usuarios con más compras</button>
+          <button id="report_product_ratings_m" class="btn btn-outline-primary btn-sm">Promedio calif. por producto</button>
         </div>
       </div>
-    </aside>
-
+    </div>
   </div>
 
-  <!-- Botón para mostrar/ocultar panel en móviles -->
-  <button class="panel-toggle d-lg-none" aria-label="Alternar panel">
-    <i class="bi bi-layout-sidebar-inset-reverse"></i>
-  </button>
-
-  <!-- Offcanvas de columnas -->
+  <!-- Offcanvas columnas (derecha) -->
   <div class="offcanvas offcanvas-end" tabindex="-1" id="columnsOffcanvas" aria-labelledby="columnsOffcanvasLabel">
     <div class="offcanvas-header">
-      <h5 id="columnsOffcanvasLabel">Columnas</h5>
+      <h5 id="columnsOffcanvasLabel">Columnas visibles</h5>
       <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
     </div>
     <div class="offcanvas-body">
@@ -150,28 +165,42 @@
         <button id="showAllCols" class="btn btn-sm btn-outline-primary w-50">Mostrar todas</button>
         <button id="hideAllCols" class="btn btn-sm btn-outline-secondary w-50">Ocultar todas</button>
       </div>
-      <div id="columnsList" class="list-group list-group-flush">
-        <!-- checkboxes injected by JS -->
+      <div id="columnsList" class="list-group list-group-flush"></div>
+    </div>
+  </div>
+
+  <!-- Filters modal -->
+  <div class="modal fade" id="filtersModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Filtros</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <form id="filtersForm" class="row gy-2"></form>
+        </div>
+        <div class="modal-footer">
+          <button id="clearFilters" type="button" class="btn btn-outline-secondary">Limpiar</button>
+          <button id="applyFilters" type="button" class="btn btn-primary">Aplicar</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- FORM Modal (create / edit) -->
+  <!-- Modal formulario -->
   <div class="modal fade" id="formModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content cs-modal">
+      <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="formModalTitle">Crear / Editar</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
-          <form id="entityForm" class="row g-3">
-            <!-- generated by JS -->
-          </form>
+          <form id="entityForm" class="row g-3"></form>
         </div>
         <div class="modal-footer">
-          <button id="formCancel" type="button" class="btn btn-outline-secondary"
-            data-bs-dismiss="modal">Cancelar</button>
+          <button id="formCancel" type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
           <button id="formSubmit" type="button" class="btn btn-primary">Guardar</button>
         </div>
       </div>
@@ -181,7 +210,7 @@
   <!-- Confirm delete -->
   <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-sm modal-dialog-centered">
-      <div class="modal-content cs-modal">
+      <div class="modal-content">
         <div class="modal-header bg-danger text-white">
           <h6 class="modal-title">Confirmar</h6>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -198,13 +227,13 @@
   </div>
 
   <!-- Loading overlay -->
-  <div id="fullLoading" class="cs-loading d-none" aria-hidden="true">
-    <div class="spinner-border text-white" role="status" style="width:3rem;height:3rem;">
+  <div id="fullLoading" class="loading-overlay d-none" aria-hidden="true">
+    <div class="spinner-border text-primary" role="status" style="width:3rem;height:3rem;">
       <span class="visually-hidden">Cargando...</span>
     </div>
   </div>
 
-  <!-- Toast container (bottom-right) -->
+  <!-- Toast container -->
   <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:14000;"></div>
 
   <!-- Bootstrap JS -->
@@ -213,5 +242,4 @@
   <!-- App JS -->
   <script src="front-end/scripts/app.js"></script>
 </body>
-
 </html>

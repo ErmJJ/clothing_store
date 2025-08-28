@@ -1,5 +1,14 @@
+/* app.js
+   Versión corregida: al hacer click en los botones de reportes dentro del offcanvas (collapse/hamburger)
+   ahora el offcanvas se cierra automaticamente (mismo comportamiento que las colecciones).
+   - Archivo completo, con comentarios en español.
+   - Solo se modificó la parte de binding de botones de reportes para cerrar el offcanvas móvil.
+*/
+
 (() => {
+  // ---------- CONFIG ----------
   const API_BASE = 'http://127.0.0.1:5000/clothing/api/v1/';
+
   const COLLECTIONS = {
     brands:    { title: 'Marcas',    endpoint: 'brands',   icon: 'bi-shop', relFor: {} },
     products:  { title: 'Productos', endpoint: 'products', icon: 'bi-bag',  relFor: { brand_id: 'brands' } },
@@ -16,15 +25,15 @@
     rating: 'bi-star-fill', comment: 'bi-chat-left-text'
   };
 
-  // State
+  // ---------- ESTADO ----------
   let currentCollection = 'brands';
   let rawData = [];
   let visibleColumns = [];
   let currentPage = 1;
   let pageSize = 5;
   const pageSizes = [5, 10, 25, 50];
+
   const relatedCache = {};
-  const columnsVisibilityKey = k => `cs_cols_${k}`;
 
   // DOM refs
   const tableHead = document.getElementById('tableHead');
@@ -32,30 +41,36 @@
   const collectionTitle = document.getElementById('collectionTitle');
   const collectionSubtitle = document.getElementById('collectionSubtitle');
   const liveSearch = document.getElementById('liveSearch');
-  const clearSearchBtn = document.getElementById('clearSearch');
-  const columnsList = document.getElementById('columnsList');
   const toastContainer = document.getElementById('toastContainer');
   const paginationContainer = document.getElementById('pagination');
   const fullLoading = document.getElementById('fullLoading');
+  const pageSizeSelectFooter = document.getElementById('pageSizeSelectFooter');
+  const apiFullDisplay = document.getElementById('apiFullDisplay');
+  const noColsMessage = document.getElementById('noColsMessage');
 
-  // modals
+  // Bootstrap modals/offcanvas
   const formModal = new bootstrap.Modal(document.getElementById('formModal'));
   const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+  const filtersModalEl = document.getElementById('filtersModal');
+  const filtersModal = new bootstrap.Modal(filtersModalEl);
 
   let isEditing = false;
   let editingId = null;
+  let activeReportId = null;
 
-  // UTIL
+  // ---------- UTIL ----------
   const joinUrl = (base, path='') => {
+    if (!path) return base;
+    if (path.startsWith('http')) return path;
     if (path.startsWith('/')) path = path.slice(1);
     return base.endsWith('/') ? base + path : base + '/' + path;
   };
 
-  function showFullLoading(show=true) { 
-    if (!fullLoading) return; 
-    fullLoading.classList.toggle('d-none', !show); 
+  function showFullLoading(show=true) {
+    if (!fullLoading) return;
+    fullLoading.classList.toggle('d-none', !show);
   }
-  
+
   function showToast(msg, type='info', delay=3000) {
     const el = document.createElement('div');
     el.className = `toast align-items-center text-bg-${type} border-0 shadow-sm mb-2`;
@@ -81,51 +96,55 @@
     } catch (err) {
       showToast('Error de conexión: ' + (err.message || ''), 'danger', 4500);
       throw err;
-    } finally { 
-      showFullLoading(false); 
+    } finally {
+      showFullLoading(false);
     }
   }
 
-  function titleCase(s){ 
-    return s.replace(/_/g,' ').split(' ').map(x => x.charAt(0).toUpperCase() + x.slice(1)).join(' '); 
-  }
-  
-  function prettyCol(col){ 
-    if (col === ' _id' || col === 'id') return 'ID'; 
-    if (col === '_id') return 'ID'; 
-    return titleCase(col); 
+  function normalize(row) {
+    if (!row || typeof row !== 'object') return row;
+    const r = { ...row };
+    if (r._id && typeof r._id === 'object') {
+      if (r._id.$oid) r._id = r._id.$oid;
+      else if (r._id.$numberInt) r._id = Number(r._id.$numberInt);
+      else if (r._id.$numberLong) r._id = Number(r._id.$numberLong);
+      else { try { r._id = JSON.stringify(r._id); } catch { r._id = String(r._id); } }
+    }
+    Object.keys(r).forEach(k => {
+      const v = r[k];
+      if (v && typeof v === 'object' && (v.$numberInt || v.$numberLong || v.$oid)) {
+        if (v.$numberInt) r[k] = Number(v.$numberInt);
+        else if (v.$numberLong) r[k] = Number(v.$numberLong);
+        else if (v.$oid) r[k] = v.$oid;
+      }
+    });
+    return r;
   }
 
-  // Persistence columns
+  function titleCase(s){ return s.replace(/_/g,' ').split(' ').map(x => x.charAt(0).toUpperCase() + x.slice(1)).join(' '); }
+  function prettyCol(col){ if (!col) return ''; if (col === '_id' || col === 'id') return 'ID'; return titleCase(col); }
+
+  const columnsVisibilityKey = k => `cs_cols_${k}`;
   function loadColumnsFromStorage(key, defaultCols) {
     try {
       const raw = localStorage.getItem(columnsVisibilityKey(key));
       if (!raw) return defaultCols.slice();
       const parsed = JSON.parse(raw);
       return defaultCols.filter(c => parsed.includes(c));
-    } catch { 
-      return defaultCols.slice(); 
-    }
+    } catch { return defaultCols.slice(); }
   }
-  
   function saveColumnsToStorage(key, cols) {
-    try { 
-      localStorage.setItem(columnsVisibilityKey(key), JSON.stringify(cols)); 
-    } catch (e) {
-      console.error('Error saving to localStorage:', e);
-    }
+    try { localStorage.setItem(columnsVisibilityKey(key), JSON.stringify(cols)); } catch (e) { console.error('Error saving cols', e); }
   }
 
-  // Data normalize
-  function normalize(row) {
-    const r = { ...row };
-    if (r._id && typeof r._id === 'object') {
-      if (r._id.$oid) r._id = r._id.$oid; 
-      else r._id = String(r._id);
-    }
-    return r;
-  }
+  // ---------- CRUD ----------
+  async function list(endpoint){ return apiFetch(`/${endpoint}`); }
+  async function getById(endpoint, id){ return apiFetch(`/${endpoint}?id=${encodeURIComponent(id)}`); }
+  async function create(endpoint, payload){ return apiFetch(`/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
+  async function update(endpoint, id, payload){ return apiFetch(`/${endpoint}?id=${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
+  async function remove(endpoint, id){ return apiFetch(`/${endpoint}?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); }
 
+  // ---------- TABLE RENDER ----------
   function buildColumnsFromData(data) {
     if (!data || !data.length) return [];
     const keys = new Set();
@@ -143,71 +162,36 @@
     return cols;
   }
 
-  // CRUD wrappers
-  async function list(endpoint){ 
-    return apiFetch(`/${endpoint}`); 
-  }
-  
-  async function getById(endpoint, id){ 
-    return apiFetch(`/${endpoint}?id=${encodeURIComponent(id)}`); 
-  }
-  
-  async function create(endpoint, payload){ 
-    return apiFetch(`/${endpoint}`, { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify(payload) 
-    }); 
-  }
-  
-  async function update(endpoint, id, payload){ 
-    return apiFetch(`/${endpoint}?id=${encodeURIComponent(id)}`, { 
-      method: 'PUT', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify(payload) 
-    }); 
-  }
-  
-  async function remove(endpoint, id){ 
-    return apiFetch(`/${endpoint}?id=${encodeURIComponent(id)}`, { 
-      method: 'DELETE' 
-    }); 
-  }
-
-  // RENDER TABLE & PAGINATION
   function renderTable(data) {
     rawData = (Array.isArray(data) ? data : (data ? [data] : [])).map(normalize);
     const defaultCols = buildColumnsFromData(rawData);
     visibleColumns = loadColumnsFromStorage(currentCollection, defaultCols);
     if (!visibleColumns || visibleColumns.length === 0) visibleColumns = defaultCols.slice();
 
-    tableHead.innerHTML = ''; 
+    tableHead.innerHTML = '';
     tableBody.innerHTML = '';
 
-    // Header
-    const tr = document.createElement('tr');
-    const colMax = {};
-    visibleColumns.forEach(col => {
-      let max = prettyCol(col).length;
-      rawData.forEach(r => { 
-        const v = r[col] === undefined || r[col] === null ? '' : String(r[col]); 
-        if (v.length > max) max = v.length; 
-      });
-      colMax[col] = max;
-    });
+    if (!visibleColumns.length) {
+      document.getElementById('dataTable').classList.add('d-none');
+      if (noColsMessage) noColsMessage.classList.remove('d-none');
+      updateRowsInfo(0,0, rawData.length);
+      buildColumnsControls();
+      return;
+    } else {
+      document.getElementById('dataTable').classList.remove('d-none');
+      if (noColsMessage) noColsMessage.classList.add('d-none');
+    }
 
+    const tr = document.createElement('tr');
     visibleColumns.forEach(col => {
-      const th = document.createElement('th'); 
-      th.className = 'align-middle';
-      const approx = Math.min(Math.max(colMax[col] * 8, 80), 420);
-      th.style.width = approx + 'px';
-      const icon = HEADER_ICONS[col] ? `<i class="bi ${HEADER_ICONS[col]} me-2"></i>` : '';
-      th.innerHTML = `<div class="d-flex align-items-center"><span class="col-icon">${icon}</span><span>${prettyCol(col)}</span></div>`;
+      const th = document.createElement('th');
+      const iconHtml = HEADER_ICONS[col] ? `<i class="bi ${HEADER_ICONS[col]}" aria-hidden="true"></i>` : '';
+      th.innerHTML = `<div class="d-flex align-items-center justify-content-start"><span>${prettyCol(col)}</span><span class="ms-2">${iconHtml}</span></div>`;
       tr.appendChild(th);
     });
 
-    const thAction = document.createElement('th'); 
-    thAction.className = 'text-end action-col'; 
+    const thAction = document.createElement('th');
+    thAction.className = 'text-end';
     thAction.textContent = 'Acciones';
     tr.appendChild(thAction);
     tableHead.appendChild(tr);
@@ -215,19 +199,52 @@
     currentPage = 1;
     applyFilterAndRenderRows();
     buildColumnsControls();
-    showToast(`Colección "${COLLECTIONS[currentCollection].title}" cargada — ${rawData.length} registros`, 'info', 1200);
+    if (apiFullDisplay) apiFullDisplay.textContent = API_BASE;
+    showToast(`Colección "${COLLECTIONS[currentCollection].title}" cargada — ${rawData.length} registros`, 'info', 900);
   }
 
-  function applyFilterAndRenderRows(){
+  function resolveRelatedLabel(col, id) {
+    if (!id) return '';
+    const relFor = COLLECTIONS[currentCollection].relFor || {};
+    const relCollection = relFor[col];
+    if (!relCollection) return String(id);
+    const opts = relatedCache[relCollection] || [];
+    const found = opts.find(o => String(o.value) === String(id));
+    return found ? `${found.label}` : String(id);
+  }
+
+  function applyFilterAndRenderRows(filters = null) {
     const q = (liveSearch.value || '').trim().toLowerCase();
-    const filtered = rawData.filter(row => {
-      if (!q) return true;
-      return visibleColumns.some(col => {
-        const v = row[col]; 
+
+    let filtered = rawData.filter(row => {
+      const matchesSearch = !q || visibleColumns.some(col => {
+        const v = row[col];
         if (v === undefined || v === null) return false;
         return String(v).toLowerCase().includes(q);
       });
+      return matchesSearch;
     });
+
+    if (filters) {
+      filtered = filtered.filter(r => {
+        return Object.entries(filters).every(([col, condition]) => {
+          if (condition === null || condition === '' || (typeof condition === 'object' && !condition.min && !condition.max)) return true;
+          const val = r[col];
+          if (val === undefined || val === null) return false;
+          if (typeof condition === 'object' && (condition.min !== undefined || condition.max !== undefined)) {
+            const num = Number(val) || 0;
+            if (condition.min !== undefined && condition.min !== '') {
+              if (num < Number(condition.min)) return false;
+            }
+            if (condition.max !== undefined && condition.max !== '') {
+              if (num > Number(condition.max)) return false;
+            }
+            return true;
+          }
+          return String(val).toLowerCase().includes(String(condition).toLowerCase());
+        });
+      });
+    }
 
     const totalItems = filtered.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -241,161 +258,117 @@
       const tr = document.createElement('tr');
       visibleColumns.forEach(col => {
         const td = document.createElement('td');
-        let v = row[col];
-        if ((col === 'brand_id' || col === 'product_id' || col === 'user_id') && v) {
-          td.innerHTML = `<span class="small text-muted">${prettyCol(col.split('_')[0])}:</span> ${v}`;
+        if (col === '_id') {
+          td.textContent = row._id ?? '';
+        } else if (/_id$/.test(col) && row[col]) {
+          td.textContent = resolveRelatedLabel(col, row[col]);
         } else {
+          let v = row[col];
           if (Array.isArray(v)) v = v.join(', ');
           td.textContent = (v === undefined || v === null) ? '' : v;
         }
         tr.appendChild(td);
       });
 
-      const tdA = document.createElement('td'); 
-      tdA.className = 'text-end action-col';
+      const tdA = document.createElement('td');
+      tdA.className = 'text-end';
       tdA.innerHTML = `
-        <div class="btn-group" role="group">
-          <button class="btn btn-sm btn-outline-primary btn-edit" data-id="${row._id}" title="Editar" aria-label="Editar">
-            <i class="bi bi-pencil"></i>
-          </button>
-          <button class="btn btn-sm btn-outline-danger btn-delete" data-id="${row._id}" title="Eliminar" aria-label="Eliminar">
-            <i class="bi bi-trash"></i>
-          </button>
+        <div class="btn-group" role="group" aria-label="Acciones">
+          <button class="btn btn-sm btn-outline-primary btn-edit" data-id="${row._id}" title="Editar"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger btn-delete" data-id="${row._id}" title="Eliminar"><i class="bi bi-trash"></i></button>
         </div>`;
       tr.appendChild(tdA);
       tableBody.appendChild(tr);
     });
 
-    // bind actions
-    tableBody.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', onEditClicked));
-    tableBody.querySelectorAll('.btn-delete').forEach(b => b.addEventListener('click', onDeleteClicked));
-
     renderPagination(totalItems, totalPages);
-    updateRowsInfo(filtered.length);
+    updateRowsInfo(start + (pageRows.length ? 1 : 0), start + pageRows.length, totalItems);
   }
 
-  function updateRowsInfo(filteredCount){
+  function updateRowsInfo(from, to, total) {
     const rowsInfo = document.getElementById('rowsInfo');
     if (!rowsInfo) return;
-    const from = (filteredCount === 0) ? 0 : ((currentPage - 1) * pageSize + 1);
-    const to = Math.min(filteredCount, currentPage * pageSize);
-    rowsInfo.textContent = `${from}-${to} de ${filteredCount} registros (página ${currentPage})`;
+    if (total === 0) rowsInfo.textContent = `0 registros`;
+    else rowsInfo.textContent = `Mostrando ${from}-${to} de ${total} registros (página ${currentPage})`;
   }
 
-  function renderPagination(totalItems, totalPages){
+  // ---------- PAGINACIÓN ----------
+  function renderPagination(totalItems, totalPages) {
     if (!paginationContainer) return;
     paginationContainer.innerHTML = '';
-    const nav = document.createElement('nav'); 
-    nav.className = 'd-flex align-items-center gap-3';
 
-    // page size selector
-    const ps = document.createElement('div'); 
-    ps.className = 'd-flex align-items-center gap-2';
-    ps.innerHTML = `<label class="small muted mb-0">Filas:</label>
-      <select id="pageSizeSelect" class="form-select form-select-sm" style="width:88px;">
-        ${pageSizes.map(sz => `<option value="${sz}" ${sz === pageSize ? 'selected' : ''}>${sz}</option>`).join('')}
-      </select>`;
-    nav.appendChild(ps);
+    const ul = document.createElement('ul');
+    ul.className = 'pagination pagination-sm mb-0';
 
-    if (totalPages <= 1) {
-      const info = document.createElement('div'); 
-      info.className = 'small muted'; 
-      info.textContent = `${totalItems} registros`;
-      nav.appendChild(info);
-    } else {
-      const ul = document.createElement('ul'); 
-      ul.className = 'pagination pagination-sm mb-0';
+    const prev = document.createElement('li');
+    prev.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prev.innerHTML = `<button class="page-link" aria-label="Anterior"><i class="bi bi-chevron-left"></i></button>`;
+    prev.addEventListener('click', () => { if (currentPage > 1) { currentPage--; applyFilterAndRenderRows(activeFilters); }});
+    ul.appendChild(prev);
 
-      const prev = document.createElement('li'); 
-      prev.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
-      prev.innerHTML = `<button class="page-link" aria-label="Anterior">&laquo;</button>`;
-      prev.addEventListener('click', () => { 
-        if (currentPage > 1) { 
-          currentPage--; 
-          applyFilterAndRenderRows(); 
-        }
-      });
-      ul.appendChild(prev);
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons/2));
+    let endPage = startPage + maxButtons - 1;
+    if (endPage > totalPages) { endPage = totalPages; startPage = Math.max(1, endPage - maxButtons + 1); }
 
-      const maxButtons = 7;
-      let startPage = Math.max(1, currentPage - Math.floor(maxButtons/2));
-      let endPage = startPage + maxButtons - 1;
-      if (endPage > totalPages) { 
-        endPage = totalPages; 
-        startPage = Math.max(1, endPage - maxButtons + 1); 
-      }
-
-      if (startPage > 1) { 
-        ul.appendChild(createPageButton(1)); 
-        if (startPage > 2) ul.appendChild(createEllipsis()); 
-      }
-
-      for (let p = startPage; p <= endPage; p++) ul.appendChild(createPageButton(p));
-
-      if (endPage < totalPages) { 
-        if (endPage < totalPages - 1) ul.appendChild(createEllipsis()); 
-        ul.appendChild(createPageButton(totalPages)); 
-      }
-
-      const next = document.createElement('li'); 
-      next.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
-      next.innerHTML = `<button class="page-link" aria-label="Siguiente">&raquo;</button>`;
-      next.addEventListener('click', () => { 
-        if (currentPage < totalPages) { 
-          currentPage++; 
-          applyFilterAndRenderRows(); 
-        }
-      });
-      ul.appendChild(next);
-
-      nav.appendChild(ul);
+    if (startPage > 1) {
+      ul.appendChild(createPageButton(1));
+      if (startPage > 2) ul.appendChild(createEllipsis());
     }
 
-    paginationContainer.appendChild(nav);
+    for (let p = startPage; p <= endPage; p++) ul.appendChild(createPageButton(p));
 
-    const pageSizeSelect = document.getElementById('pageSizeSelect');
-    if (pageSizeSelect) pageSizeSelect.addEventListener('change', (e) => { 
-      pageSize = Number(e.target.value) || 5; 
-      currentPage = 1; 
-      applyFilterAndRenderRows(); 
-    });
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) ul.appendChild(createEllipsis());
+      ul.appendChild(createPageButton(totalPages));
+    }
+
+    const next = document.createElement('li');
+    next.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    next.innerHTML = `<button class="page-link" aria-label="Siguiente"><i class="bi bi-chevron-right"></i></button>`;
+    next.addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; applyFilterAndRenderRows(activeFilters); }});
+    ul.appendChild(next);
+
+    paginationContainer.appendChild(ul);
+
+    if (pageSizeSelectFooter) {
+      pageSizeSelectFooter.innerHTML = pageSizes.map(sz => `<option value="${sz}" ${sz === pageSize ? 'selected' : ''}>${sz}</option>`).join('');
+      pageSizeSelectFooter.onchange = (e) => { pageSize = Number(e.target.value) || 5; currentPage = 1; applyFilterAndRenderRows(activeFilters); };
+    }
   }
 
-  function createPageButton(n){
-    const li = document.createElement('li'); 
+  function createPageButton(n) {
+    const li = document.createElement('li');
     li.className = `page-item ${n === currentPage ? 'active' : ''}`;
     li.innerHTML = `<button class="page-link">${n}</button>`;
-    li.addEventListener('click', () => { 
-      if (n === currentPage) return; 
-      currentPage = n; 
-      applyFilterAndRenderRows(); 
-    });
+    li.addEventListener('click', () => { if (n === currentPage) return; currentPage = n; applyFilterAndRenderRows(activeFilters); });
     return li;
   }
-  
-  function createEllipsis(){ 
-    const li = document.createElement('li'); 
-    li.className = 'page-item disabled'; 
-    li.innerHTML = `<span class="page-link">…</span>`; 
-    return li; 
+
+  function createEllipsis() {
+    const li = document.createElement('li');
+    li.className = 'page-item disabled';
+    li.innerHTML = `<span class="page-link">…</span>`;
+    return li;
   }
 
-  // COLUMNS controls
-  function buildColumnsControls(){
+  // ---------- COLUMN CONTROLS ----------
+  function buildColumnsControls() {
+    const columnsList = document.getElementById('columnsList');
     columnsList.innerHTML = '';
     const defaultCols = buildColumnsFromData(rawData);
-    const fallback = { 
-      brands: ['_id','name','country','founded'], 
-      products: ['_id','name','brand_id','category','price','stock'], 
-      users: ['_id','username','email','password','country'], 
-      sales: ['_id','user_id','product_id','quantity','date'], 
-      reviews: ['_id','user_id','product_id','rating','comment'] 
+    const fallback = {
+      brands: ['_id','name','country','founded'],
+      products: ['_id','name','brand_id','category','price','stock'],
+      users: ['_id','username','email','password','country'],
+      sales: ['_id','user_id','product_id','quantity','date'],
+      reviews: ['_id','user_id','product_id','rating','comment']
     }[currentCollection] || [];
     const cols = defaultCols.length ? defaultCols : fallback;
     cols.forEach(col => {
       const id = `col-${col}`;
       const checked = visibleColumns.includes(col);
-      const div = document.createElement('div'); 
+      const div = document.createElement('div');
       div.className = 'form-check form-switch mb-2';
       div.innerHTML = `<input class="form-check-input" type="checkbox" id="${id}" data-col="${col}" ${checked ? 'checked' : ''}>
         <label class="form-check-label" for="${id}">${prettyCol(col)}</label>`;
@@ -405,8 +378,8 @@
     columnsList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', (e) => {
         const col = e.target.dataset.col;
-        if (e.target.checked) { 
-          if (!visibleColumns.includes(col)) visibleColumns.push(col); 
+        if (e.target.checked) {
+          if (!visibleColumns.includes(col)) visibleColumns.push(col);
         } else {
           visibleColumns = visibleColumns.filter(c => c !== col);
         }
@@ -417,27 +390,40 @@
     });
   }
 
-  // RELATED selects for forms
+  // ---------- RELACIONES ----------
   async function fetchRelated(rel) {
     if (relatedCache[rel]) return relatedCache[rel];
     try {
-      const list = await list(rel);
-      const arr = Array.isArray(list) ? list : (list ? [list] : []);
-      const mapped = arr.map(it => ({ 
-        value: it._id || it.id || '', 
-        label: it.name || it.username || it.email || String(it._id).slice(0, 8) 
-      }));
+      const listData = await list(rel);
+      const arr = Array.isArray(listData) ? listData : (listData ? [listData] : []);
+      const mapped = arr.map(it => {
+        const n = normalize(it);
+        const value = n._id ?? n.id ?? '';
+        // Mejor lógica para elegir el label representativo
+        let label = '';
+        if (n.name) label = n.name;
+        else if (n.title) label = n.title;
+        else if (n.username) label = n.username;
+        else if (n.email) label = n.email;
+        else if (n.country) label = n.country;
+        else if (n.category) label = n.category;
+        else if (n.brand) label = n.brand;
+        else if (n.product) label = n.product;
+        else label = String(value);
+        return { value, label };
+      });
       relatedCache[rel] = mapped;
       return mapped;
-    } catch (err) { 
+    } catch (err) {
       showToast(`Error cargando ${rel}: ${err.message}`, 'warning', 3000);
-      relatedCache[rel] = []; 
-      return []; 
+      relatedCache[rel] = [];
+      return [];
     }
   }
 
+  // ---------- FORM DINÁMICO ----------
   async function makeFormFields(sample = {}) {
-    const form = document.getElementById('entityForm'); 
+    const form = document.getElementById('entityForm');
     form.innerHTML = '';
     const presets = {
       brands: ['name','country','founded'],
@@ -446,31 +432,50 @@
       sales: ['user_id','product_id','quantity','date'],
       reviews: ['user_id','product_id','rating','comment']
     }[currentCollection] || [];
-    const keys = new Set(); 
-    if (presets) presets.forEach(k => keys.add(k)); 
+
+    const keys = new Set();
+    if (presets) presets.forEach(k => keys.add(k));
     Object.keys(sample || {}).forEach(k => keys.add(k));
     const fields = Array.from(keys).filter(k => k !== '_id');
 
-    // collect relation needs
     const relRequests = [];
-    fields.forEach(f => { 
-      if (/_id$/.test(f)) { 
-        const relCol = COLLECTIONS[currentCollection].relFor[f] || f.replace(/_id$/, '') + 's'; 
-        relRequests.push({ field: f, rel: relCol }); 
+    fields.forEach(f => {
+      if (/_id$/.test(f)) {
+        const relCol = COLLECTIONS[currentCollection].relFor[f] || f.replace(/_id$/, '') + 's';
+        relRequests.push({ field: f, rel: relCol });
       }
     });
-    
-    const relData = {};
-    await Promise.all(relRequests.map(async r => { 
-      relData[r.field] = await fetchRelated(r.rel); 
-    }));
 
+    const relData = {};
+    await Promise.all(relRequests.map(async r => { relData[r.field] = await fetchRelated(r.rel); }));
+
+    // Ejemplos para placeholders
+    const examplePlaceholders = {
+      name: 'Ej: Nike',
+      country: 'Ej: Estados Unidos',
+      founded: 'Ej: 1964',
+      category: 'Ej: Camisetas',
+      price: 'Ej: 99.99',
+      stock: 'Ej: 100',
+      username: 'Ej: juanperez',
+      email: 'Ej: usuario@email.com',
+      password: 'Ej: 123456',
+      quantity: 'Ej: 2',
+      rating: 'Ej: 4.5',
+      comment: 'Ej: Muy buen producto',
+      date: 'Ej: 2025-08-27'
+    };
     for (const key of fields) {
       const val = sample[key] ?? '';
       const id = `field-${key}`;
-      const wrapper = document.createElement('div'); 
+      const wrapper = document.createElement('div');
       wrapper.className = 'col-12 col-md-6 mb-3';
-      const placeholder = `Ingrese ${prettyCol(key)}`;
+      let placeholder = '';
+      if (!isEditing) {
+        placeholder = examplePlaceholders[key] || `Ejemplo`;
+      } else {
+        placeholder = val ? String(val) : (examplePlaceholders[key] || 'Ejemplo');
+      }
 
       if (/_id$/.test(key)) {
         const options = relData[key] || [];
@@ -481,175 +486,145 @@
           <label for="${id}" class="form-label small text-muted">${prettyCol(key)}</label>
           <select id="${id}" name="${key}" class="form-select form-select-sm">${opts}</select>`;
         form.appendChild(wrapper);
-        if (val) {
-          setTimeout(() => {
-            const select = wrapper.querySelector('select');
-            if (select) select.value = String(val);
-          }, 0);
-        }
+        if (val) setTimeout(() => { const select = wrapper.querySelector('select'); if (select) select.value = String(val); }, 0);
         continue;
       }
+
+      // Inputs: en crear, value vacío y placeholder ejemplo; en editar, value vacío y placeholder con valor actual
+      let inputValue = '';
+      if (isEditing) inputValue = '';
 
       if (key === 'date') {
         wrapper.innerHTML = `
           <label for="${id}" class="form-label small text-muted">${prettyCol(key)}</label>
-          <input type="date" id="${id}" name="${key}" class="form-control form-control-sm" 
-                 value="${val ? val.split('T')[0] : ''}" placeholder="${placeholder}">`;
-      } else if (['price','stock','quantity','rating','founded'].includes(key)) {
+          <input type="date" id="${id}" name="${key}" class="form-control form-control-sm" value="${inputValue}" placeholder="${placeholder}">`;
+      } else if (["price","stock","quantity","rating","founded"].includes(key)) {
         wrapper.innerHTML = `
           <label for="${id}" class="form-label small text-muted">${prettyCol(key)}</label>
-          <input type="number" id="${id}" name="${key}" class="form-control form-control-sm" 
-                 value="${val}" placeholder="${placeholder}" step="${key === 'rating' ? '0.1' : '1'}">`;
+          <input type="number" id="${id}" name="${key}" class="form-control form-control-sm" value="${inputValue}" placeholder="${placeholder}" step="${key === 'rating' ? '0.1' : '1'}">`;
       } else if (key === 'comment') {
         wrapper.innerHTML = `
           <label for="${id}" class="form-label small text-muted">${prettyCol(key)}</label>
-          <textarea id="${id}" name="${key}" class="form-control form-control-sm" rows="2" 
-                    placeholder="${placeholder}">${val}</textarea>`;
+          <textarea id="${id}" name="${key}" class="form-control form-control-sm" rows="2" placeholder="${placeholder}">${inputValue}</textarea>`;
       } else if (key === 'password') {
         wrapper.innerHTML = `
           <label for="${id}" class="form-label small text-muted">${prettyCol(key)}</label>
-          <input type="text" id="${id}" name="${key}" class="form-control form-control-sm" 
-                 value="${val}" placeholder="${placeholder}">
-          <div class="form-text">Texto plano — práctica únicamente.</div>`;
+          <input type="text" id="${id}" name="${key}" class="form-control form-control-sm" value="${inputValue}" placeholder="${placeholder}">
+          <div class="form-text">Texto plano — solo en entornos de prueba.</div>`;
       } else {
         wrapper.innerHTML = `
           <label for="${id}" class="form-label small text-muted">${prettyCol(key)}</label>
-          <input type="text" id="${id}" name="${key}" class="form-control form-control-sm" 
-                 value="${val}" placeholder="${placeholder}">`;
+          <input type="text" id="${id}" name="${key}" class="form-control form-control-sm" value="${inputValue}" placeholder="${placeholder}">`;
       }
       form.appendChild(wrapper);
     }
   }
 
-  // MODALS: create / edit / delete
-  async function openCreateModal(){
-    isEditing = false; 
-    editingId = null;
+  // ---------- MODALES / CRUD ----------
+  async function openCreateModal() {
+    isEditing = false; editingId = null;
     document.getElementById('formModalTitle').textContent = `Crear ${COLLECTIONS[currentCollection].title}`;
     const sample = rawData[0] || {};
     await makeFormFields(sample);
     formModal.show();
   }
 
-  async function onEditClicked(e){
-    const id = e.currentTarget.dataset.id;
+  async function onEditClickedId(id) {
     let row = rawData.find(r => String(r._id) === String(id));
     if (!row) {
-      try { 
-        row = await getById(COLLECTIONS[currentCollection].endpoint, id); 
-      } catch (err) { 
-        showToast('Registro no encontrado', 'warning'); 
-        return; 
+      try {
+        const fetched = await getById(COLLECTIONS[currentCollection].endpoint, id);
+        row = normalize(fetched);
+      } catch (err) {
+        showToast('Registro no encontrado', 'warning');
+        return;
       }
     }
-    isEditing = true; 
-    editingId = id;
+    isEditing = true; editingId = id;
     document.getElementById('formModalTitle').textContent = `Editar ${COLLECTIONS[currentCollection].title}`;
     await makeFormFields(row);
     formModal.show();
   }
 
-  function onDeleteClicked(e){
-    const id = e.currentTarget.dataset.id;
+  function onDeleteClickedId(id) {
     document.getElementById('confirmMessage').textContent = `¿Seguro que desea eliminar el elemento con id = ${id}? Esta acción no se puede deshacer.`;
-    const confirmBtn = document.getElementById('confirmDeleteBtn');
-    confirmBtn.onclick = async () => {
+    const confirmBtnOld = document.getElementById('confirmDeleteBtn');
+    const confirmBtn = confirmBtnOld.cloneNode(true);
+    confirmBtnOld.parentNode.replaceChild(confirmBtn, confirmBtnOld);
+    confirmBtn.addEventListener('click', async () => {
       try {
         await remove(COLLECTIONS[currentCollection].endpoint, id);
         showToast('Eliminado correctamente', 'success', 1500);
         confirmModal.hide();
         await loadCollection(currentCollection);
-      } catch (err) { 
-        showToast('Error eliminando: ' + (err.message || ''), 'danger', 4000); 
+      } catch (err) {
+        showToast('Error eliminando: ' + (err.message || ''), 'danger', 4000);
       }
-    };
+    });
     confirmModal.show();
   }
 
-  async function onFormSubmit(){
+  async function onFormSubmit() {
     const form = document.getElementById('entityForm');
-    const fd = new FormData(form); 
+    const fd = new FormData(form);
     const payload = {};
     for (const [k, v] of fd.entries()) {
-      if (['price','stock','quantity','rating','founded'].includes(k)) {
-        payload[k] = v === '' ? 0 : Number(v);
-      } else {
-        payload[k] = v;
-      }
+      if (['price','stock','quantity','rating','founded'].includes(k)) payload[k] = v === '' ? 0 : Number(v);
+      else payload[k] = v;
     }
-    
     try {
-      if (!isEditing) { 
-        await create(COLLECTIONS[currentCollection].endpoint, payload); 
-        showToast('Creado con éxito', 'success', 1400); 
-      } else { 
-        await update(COLLECTIONS[currentCollection].endpoint, editingId, payload); 
-        showToast('Actualizado con éxito', 'success', 1400); 
+      let created = null;
+      if (!isEditing) {
+        created = await create(COLLECTIONS[currentCollection].endpoint, payload);
+        showToast('Creado con éxito', 'success', 1200);
+      } else {
+        await update(COLLECTIONS[currentCollection].endpoint, editingId, payload);
+        showToast('Actualizado con éxito', 'success', 1200);
       }
       formModal.hide();
       await loadCollection(currentCollection);
-    } catch (err) { 
-      showToast('Error guardando: ' + (err.message || ''), 'danger', 4500); 
+      // Si se creó una entidad relacional, limpiar el cache y actualizar selects
+      if (!isEditing && created && ['brands','users','products'].includes(currentCollection)) {
+        Object.keys(COLLECTIONS).forEach(col => {
+          Object.values(COLLECTIONS[col].relFor || {}).forEach(rel => {
+            if (rel === currentCollection) relatedCache[rel] = undefined;
+          });
+        });
+      }
+    } catch (err) {
+      showToast('Error guardando: ' + (err.message || ''), 'danger', 4500);
     }
   }
 
-  // Reports (do NOT change active collection)
-  async function loadReport_brands_sales(){ 
-    collectionTitle.textContent = 'Reporte: Marcas con ventas'; 
-    collectionSubtitle.textContent = 'Marcas que han tenido al menos una venta'; 
-    try { 
-      const data = await apiFetch('/reports/brands-with-sales'); 
-      renderTable(data); 
-    } catch(err){ 
-      showToast('Error cargando reporte', 'danger', 3000); 
-    } 
-  }
-  
-  async function loadReport_products_stock(){ 
-    collectionTitle.textContent = 'Reporte: Prendas vendidas y stock'; 
-    collectionSubtitle.textContent = 'Cantidad vendida por producto y stock restante'; 
-    try { 
-      const data = await apiFetch('/reports/products-stock'); 
-      renderTable(data); 
-    } catch(err){ 
-      showToast('Error cargando reporte', 'danger', 3000); 
-    } 
-  }
-  
-  async function loadReport_top_brands(){ 
-    collectionTitle.textContent = 'Reporte: Top 5 marcas'; 
-    collectionSubtitle.textContent = 'Marcas más vendidas (Top 5)'; 
-    try { 
-      const data = await apiFetch('/reports/top-brands'); 
-      renderTable(data); 
-    } catch(err){ 
-      showToast('Error cargando reporte', 'danger', 3000); 
-    } 
-  }
-  
-  async function loadReport_top_users(){ 
-    collectionTitle.textContent = 'Reporte: Usuarios con más compras'; 
-    collectionSubtitle.textContent = 'Usuarios ordenados por número de compras'; 
-    try { 
-      const data = await apiFetch('/reports/top-users'); 
-      renderTable(data); 
-    } catch(err){ 
-      showToast('Error cargando reporte', 'danger', 3000); 
-    } 
-  }
-  
-  async function loadReport_product_ratings(){ 
-    collectionTitle.textContent = 'Reporte: Promedio calif. por producto'; 
-    collectionSubtitle.textContent = 'Productos y su calificación media'; 
-    try { 
-      const data = await apiFetch('/reports/product-ratings'); 
-      renderTable(data); 
-    } catch(err){ 
-      showToast('Error cargando reporte', 'danger', 3000); 
-    } 
+  // ---------- REPORTS: marcado y utilidades ----------
+  function clearReportMarks() {
+    ['report_brands_sales','report_products_stock','report_top_brands','report_top_users','report_product_ratings',
+     'report_brands_sales_m','report_products_stock_m','report_top_brands_m','report_top_users_m','report_product_ratings_m'].forEach(key => {
+       const btn = document.getElementById(key);
+       if (!btn) return;
+       btn.classList.remove('btn-primary');
+       btn.classList.add('btn-outline-primary');
+     });
+    activeReportId = null;
   }
 
-  // CSV export
+  function markReportButton(id) {
+    clearReportMarks();
+    if (!id) return;
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.remove('btn-outline-primary');
+    btn.classList.add('btn-primary');
+    activeReportId = id;
+  }
+
+  async function loadReport_brands_sales(){ collectionTitle.textContent = 'Reporte: Marcas con ventas'; collectionSubtitle.textContent = 'Marcas con ventas'; markReportButton('report_brands_sales'); try { const data = await apiFetch('/reports/brands-with-sales'); renderTable(data); } catch(err){ showToast('Error cargando reporte', 'danger', 3000); } }
+  async function loadReport_products_stock(){ collectionTitle.textContent = 'Reporte: Prendas vendidas y stock'; collectionSubtitle.textContent = 'Prendas vendidas & stock'; markReportButton('report_products_stock'); try { const data = await apiFetch('/reports/products-stock'); renderTable(data); } catch(err){ showToast('Error cargando reporte', 'danger', 3000); } }
+  async function loadReport_top_brands(){ collectionTitle.textContent = 'Reporte: Top 5 marcas'; collectionSubtitle.textContent = 'Top 5 marcas'; markReportButton('report_top_brands'); try { const data = await apiFetch('/reports/top-brands'); renderTable(data); } catch(err){ showToast('Error cargando reporte', 'danger', 3000); } }
+  async function loadReport_top_users(){ collectionTitle.textContent = 'Reporte: Usuarios con más compras'; collectionSubtitle.textContent = 'Usuarios con más compras'; markReportButton('report_top_users'); try { const data = await apiFetch('/reports/top-users'); renderTable(data); } catch(err){ showToast('Error cargando reporte', 'danger', 3000); } }
+  async function loadReport_product_ratings(){ collectionTitle.textContent = 'Reporte: Promedio calif. por producto'; collectionSubtitle.textContent = 'Promedio calif. por producto'; markReportButton('report_product_ratings'); try { const data = await apiFetch('/reports/product-ratings'); renderTable(data); } catch(err){ showToast('Error cargando reporte', 'danger', 3000); } }
+
+  // ---------- EXPORT CSV ----------
   function exportVisibleToCSV(filename = `${currentCollection}.csv`) {
     const headers = visibleColumns.slice();
     const rows = [headers];
@@ -667,229 +642,237 @@
     const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); 
-    a.href = url; 
-    a.download = filename; 
-    document.body.appendChild(a); 
-    a.click(); 
-    a.remove(); 
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     showToast('Exportado CSV', 'success', 1200);
   }
 
-  // Debounce
-  function debounce(fn, wait){ 
-    let t; 
-    return (...a) => { 
-      clearTimeout(t); 
-      t = setTimeout(() => fn.apply(this, a), wait); 
-    }; 
+  // ---------- DEBOUNCE ----------
+  function debounce(fn, wait=220) {
+    let t;
+    return (...a) => { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), wait); };
   }
-  
-  const onSearch = debounce(() => { 
-    currentPage = 1; 
-    applyFilterAndRenderRows(); 
-  }, 220);
+  const onSearch = debounce(() => { currentPage = 1; applyFilterAndRenderRows(activeFilters); });
 
-  // Collections panel: visual nav with counts
-  async function renderCollectionsPanel(){
-    const container = document.getElementById('collectionsRadios'); 
-    container.innerHTML = '';
-    const title = document.createElement('div'); 
-    title.className = 'cs-group-title'; 
-    title.textContent = 'Colecciones'; 
-    container.appendChild(title);
-    const nav = document.createElement('div'); 
-    nav.className = 'cs-nav'; 
-    container.appendChild(nav);
+  // ---------- COLLECTIONS PANEL ----------
+  async function renderCollectionsPanel() {
+    const container = document.getElementById('collectionsRadios');
+    const containerOff = document.getElementById('collectionsRadiosOffcanvas');
+    if (container) container.innerHTML = '';
+    if (containerOff) containerOff.innerHTML = '';
 
     const keys = Object.keys(COLLECTIONS);
-    const counts = await Promise.all(keys.map(async k => { 
-      try { 
-        const l = await list(COLLECTIONS[k].endpoint); 
-        const arr = Array.isArray(l) ? l : (l ? [l] : []); 
-        return arr.length; 
-      } catch (err) { 
-        console.error('Error counting', k, err);
-        return 0; 
-      }
+    const counts = await Promise.all(keys.map(async k => {
+      try {
+        const l = await list(COLLECTIONS[k].endpoint);
+        const arr = Array.isArray(l) ? l : (l ? [l] : []);
+        return arr.length;
+      } catch (err) { console.error('Error counting', k, err); return 0; }
     }));
 
-    keys.forEach((k, i) => {
+    function createCollectionItem(k, cnt) {
       const meta = COLLECTIONS[k];
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+      item.innerHTML = `<div><span class="me-2"><i class="bi ${meta.icon}"></i></span>${meta.title}</div><span class="badge bg-light text-muted">${cnt}</span>`;
+      item.addEventListener('click', async () => {
+        clearReportMarks();
+        markCollectionActive(k);
+        currentCollection = k;
+        await loadCollection(k);
+        // si vino desde el offcanvas (mobile), cerrarlo
+        const off = bootstrap.Offcanvas.getInstance(document.getElementById('panelOffcanvas'));
+        if (off) off.hide();
+      });
+      return item;
+    }
+
+    keys.forEach((k, i) => {
       const cnt = counts[i] ?? 0;
-      const isActive = k === currentCollection;
-      
-      const item = document.createElement('div'); 
-      item.className = `cs-nav-item ${isActive ? 'active' : ''}`;
-      item.tabIndex = 0; 
-      item.dataset.collection = k;
-      item.setAttribute('role', 'button');
-      item.setAttribute('aria-label', `${meta.title} - ${cnt} registros`);
-      
-      item.innerHTML = `
-        <div class="cs-icon-wrapper">
-          <div class="cs-icon"><i class="bi ${meta.icon}" aria-hidden="true"></i></div>
-        </div>
-        <div class="cs-content">
-          <div class="cs-title">${meta.title}</div>
-          <div class="cs-sub">${cnt} registros encontrados</div>
-        </div>
-        <div class="cs-right">
-          <div class="cs-badge">${cnt}</div>
-          <div class="cs-arrow"><i class="bi bi-chevron-right" aria-hidden="true"></i></div>
-        </div>`;
-      
-      item.addEventListener('click', async () => { 
-        document.querySelectorAll('.cs-nav-item').forEach(n => n.classList.remove('active')); 
-        item.classList.add('active'); 
-        currentCollection = k; 
-        await loadCollection(k); 
-      });
-      
-      item.addEventListener('keydown', (ev) => { 
-        if (ev.key === 'Enter' || ev.key === ' ') { 
-          ev.preventDefault(); 
-          item.click(); 
-        }
-      });
-      
-      nav.appendChild(item);
+      const desktopItem = createCollectionItem(k, cnt);
+      const mobileItem = createCollectionItem(k, cnt);
+      if (container) container.appendChild(desktopItem);
+      if (containerOff) containerOff.appendChild(mobileItem);
     });
 
-    // small divider + keep report buttons visible (already in DOM)
-    const divider = document.createElement('div'); 
-    divider.className = 'cs-divider-soft'; 
-    container.appendChild(divider);
-    const rptTitle = document.createElement('div'); 
-    rptTitle.className = 'cs-group-title'; 
-    rptTitle.textContent = 'Reportes'; 
-    container.appendChild(rptTitle);
+    // BIND de buttons de reportes: ahora cerramos el offcanvas cuando se hace click en la versión móvil
+    [
+      ['report_brands_sales','report_brands_sales_m', loadReport_brands_sales],
+      ['report_products_stock','report_products_stock_m', loadReport_products_stock],
+      ['report_top_brands','report_top_brands_m', loadReport_top_brands],
+      ['report_top_users','report_top_users_m', loadReport_top_users],
+      ['report_product_ratings','report_product_ratings_m', loadReport_product_ratings]
+    ].forEach(([idD,idM,fn]) => {
+      const btnD = document.getElementById(idD);
+      const btnM = document.getElementById(idM);
 
-    // Ensure original report buttons remain visible and accessible; no hide.
-    // Add tiny press animation
-    ['report_brands_sales','report_products_stock','report_top_brands','report_top_users','report_product_ratings'].forEach(id => {
-      const btn = document.getElementById(id);
-      if (btn) {
-        btn.style.display = 'inline-flex';
-        btn.addEventListener('click', () => { 
-          btn.classList.add('pressed'); 
-          setTimeout(() => btn.classList.remove('pressed'), 300); 
-        });
-      }
+      // desktop: comportamiento previo (no cerrar offcanvas porque no está abierto)
+      if (btnD) btnD.onclick = () => { fn(); markReportButton(idD); markCollectionActive(null); };
+
+      // mobile (offcanvas): además de ejecutar el reporte, marcamos y cerramos el offcanvas
+      if (btnM) btnM.onclick = () => {
+        fn();
+        markReportButton(idM);
+        markCollectionActive(null);
+        // Cerrar panelOffcanvas si está abierto (comportamiento pedido)
+        const off = bootstrap.Offcanvas.getInstance(document.getElementById('panelOffcanvas'));
+        if (off) off.hide();
+      };
     });
   }
 
-  // Load collection
-  async function loadCollection(key){
+  // Marcar visualmente la colección activa
+  function markCollectionActive(collectionKey) {
+    document.querySelectorAll('#collectionsRadios .list-group-item, #collectionsRadiosOffcanvas .list-group-item').forEach(el => {
+      el.classList.remove('active');
+    });
+    if (!collectionKey) return;
+    const containers = [document.getElementById('collectionsRadios'), document.getElementById('collectionsRadiosOffcanvas')];
+    containers.forEach(container => {
+      if (!container) return;
+      Array.from(container.children).forEach(btn => {
+        if (!btn) return;
+        if (btn.textContent && btn.textContent.trim().startsWith(COLLECTIONS[collectionKey].title)) {
+          btn.classList.add('active');
+        }
+      });
+    });
+  }
+
+  // ---------- LOAD COLLECTION ----------
+  async function loadCollection(key) {
     currentCollection = key;
     const meta = COLLECTIONS[key];
     collectionTitle.textContent = meta.title;
     collectionSubtitle.textContent = `${meta.title} (Panel de administración)`;
     try {
       const data = await list(meta.endpoint);
+      clearReportMarks();
+      markCollectionActive(key);
       renderTable(data);
-    } catch(err) { 
-      console.error(err); 
-      showToast('Error cargando colección: ' + (err.message || ''), 'danger', 4000); 
-      renderTable([]); 
+    } catch (err) {
+      console.error(err);
+      showToast('Error cargando colección: ' + (err.message || ''), 'danger', 4000);
+      renderTable([]);
     }
   }
 
-  // Panel toggle functionality
-  function setupPanelToggle() {
-    const panelToggle = document.querySelector('.panel-toggle');
-    const panel = document.querySelector('.cs-panel');
-    
-    if (panelToggle && panel) {
-      panelToggle.addEventListener('click', () => {
-        panel.classList.toggle('active');
-        const icon = panelToggle.querySelector('i');
-        if (panel.classList.contains('active')) {
-          icon.classList.remove('bi-layout-sidebar-inset-reverse');
-          icon.classList.add('bi-x-lg');
+  // ---------- FILTERS ----------
+  let activeFilters = null;
+  function detectFieldType(col) {
+    if (/date$/i.test(col)) return 'date';
+    if (/(price|stock|quantity|rating|founded|amount|total)/i.test(col)) return 'number';
+    return 'text';
+  }
+
+  function openFiltersModal() {
+    const form = document.getElementById('filtersForm');
+    form.innerHTML = '';
+    visibleColumns.forEach(col => {
+      const type = detectFieldType(col);
+      const id = `filter-${col}`;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'col-12 mb-2';
+      if (type === 'number') {
+        wrapper.innerHTML = `
+          <label class="form-label small text-muted">${prettyCol(col)} (min / max)</label>
+          <div class="d-flex gap-2">
+            <input id="${id}-min" type="number" class="form-control form-control-sm" placeholder="min">
+            <input id="${id}-max" type="number" class="form-control form-control-sm" placeholder="max">
+          </div>`;
+      } else if (type === 'date') {
+        wrapper.innerHTML = `
+          <label class="form-label small text-muted">${prettyCol(col)} (desde / hasta)</label>
+          <div class="d-flex gap-2">
+            <input id="${id}-min" type="date" class="form-control form-control-sm">
+            <input id="${id}-max" type="date" class="form-control form-control-sm">
+          </div>`;
+      } else {
+        wrapper.innerHTML = `
+          <label class="form-label small text-muted">${prettyCol(col)}</label>
+          <input id="${id}" type="text" class="form-control form-control-sm" placeholder="Contiene...">`;
+      }
+      form.appendChild(wrapper);
+    });
+
+    document.getElementById('applyFilters').onclick = () => {
+      const filters = {};
+      visibleColumns.forEach(col => {
+        const type = detectFieldType(col);
+        const id = `filter-${col}`;
+        if (type === 'number' || type === 'date') {
+          const minEl = document.getElementById(`${id}-min`);
+          const maxEl = document.getElementById(`${id}-max`);
+          filters[col] = { min: minEl.value, max: maxEl.value };
         } else {
-          icon.classList.remove('bi-x-lg');
-          icon.classList.add('bi-layout-sidebar-inset-reverse');
+          const el = document.getElementById(id);
+          filters[col] = el.value;
         }
       });
+      activeFilters = filters;
+      currentPage = 1;
+      applyFilterAndRenderRows(activeFilters);
+      filtersModal.hide();
+    };
 
-      // Close panel when clicking outside
-      document.addEventListener('click', (e) => {
-        if (window.innerWidth < 1000 && 
-            panel.classList.contains('active') && 
-            !panel.contains(e.target) && 
-            !panelToggle.contains(e.target)) {
-          panel.classList.remove('active');
-          const icon = panelToggle.querySelector('i');
-          icon.classList.remove('bi-x-lg');
-          icon.classList.add('bi-layout-sidebar-inset-reverse');
-        }
-      });
-    }
+    document.getElementById('clearFilters').onclick = () => {
+      activeFilters = null;
+      document.getElementById('filtersForm').querySelectorAll('input').forEach(i => i.value = '');
+      applyFilterAndRenderRows(activeFilters);
+    };
+
+    filtersModal.show();
   }
 
-  // Events binding
+  // ---------- EVENTS BIND ----------
   function bindEvents() {
     document.getElementById('btnCreate').addEventListener('click', openCreateModal);
     document.getElementById('btnExport').addEventListener('click', () => exportVisibleToCSV());
     document.getElementById('formSubmit').addEventListener('click', onFormSubmit);
-    document.getElementById('clearSearch').addEventListener('click', () => { 
-      liveSearch.value = ''; 
-      currentPage = 1; 
-      applyFilterAndRenderRows(); 
-    });
+    document.getElementById('clearSearch').addEventListener('click', () => { liveSearch.value = ''; currentPage = 1; applyFilterAndRenderRows(activeFilters); });
     liveSearch.addEventListener('input', onSearch);
-    
+    document.getElementById('btnFilters').addEventListener('click', openFiltersModal);
+
     const showAllCols = document.getElementById('showAllCols');
     const hideAllCols = document.getElementById('hideAllCols');
-    
-    if (showAllCols) {
-      showAllCols.addEventListener('click', () => { 
-        const all = buildColumnsFromData(rawData); 
-        visibleColumns = (all.length ? all : ['_id','name']).slice(); 
-        saveColumnsToStorage(currentCollection, visibleColumns); 
-        currentPage = 1; 
-        renderTable(rawData); 
-      });
-    }
-    
-    if (hideAllCols) {
-      hideAllCols.addEventListener('click', () => { 
-        visibleColumns = []; 
-        saveColumnsToStorage(currentCollection, visibleColumns); 
-        currentPage = 1; 
-        renderTable(rawData); 
-      });
-    }
-
-    // Reports hooks
-    document.getElementById('report_brands_sales').addEventListener('click', loadReport_brands_sales);
-    document.getElementById('report_products_stock').addEventListener('click', loadReport_products_stock);
-    document.getElementById('report_top_brands').addEventListener('click', loadReport_top_brands);
-    document.getElementById('report_top_users').addEventListener('click', loadReport_top_users);
-    document.getElementById('report_product_ratings').addEventListener('click', loadReport_product_ratings);
-
-    // Form submit via Enter in modal (accessibility)
-    document.getElementById('entityForm').addEventListener('keydown', (e) => { 
-      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { 
-        e.preventDefault(); 
-        document.getElementById('formSubmit').click(); 
-      }
+    if (showAllCols) showAllCols.addEventListener('click', () => {
+      const all = buildColumnsFromData(rawData);
+      visibleColumns = (all.length ? all : ['_id','name']).slice();
+      saveColumnsToStorage(currentCollection, visibleColumns);
+      currentPage = 1;
+      renderTable(rawData);
+    });
+    if (hideAllCols) hideAllCols.addEventListener('click', () => {
+      visibleColumns = [];
+      saveColumnsToStorage(currentCollection, visibleColumns);
+      currentPage = 1;
+      renderTable(rawData);
     });
 
-    // Setup panel toggle
-    setupPanelToggle();
+    tableBody.addEventListener('click', (ev) => {
+      const editBtn = ev.target.closest('.btn-edit');
+      if (editBtn) { onEditClickedId(editBtn.dataset.id); return; }
+      const delBtn = ev.target.closest('.btn-delete');
+      if (delBtn) { onDeleteClickedId(delBtn.dataset.id); return; }
+    });
+
+    document.getElementById('entityForm').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        document.getElementById('formSubmit').click();
+      }
+    });
   }
 
-  // Init
+  // ---------- INIT ----------
   document.addEventListener('DOMContentLoaded', async () => {
+    if (apiFullDisplay) apiFullDisplay.textContent = API_BASE;
+
     await renderCollectionsPanel();
     await loadCollection(currentCollection);
     bindEvents();
-    
-    // tooltips (if any)
+
     Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]')).forEach(el => new bootstrap.Tooltip(el));
   });
-
 })();
